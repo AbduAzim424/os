@@ -1,7 +1,7 @@
 package:
   name: perl-command-runner
   version: "0.201"
-  epoch: 0
+  epoch: 1
   description: run external commands and Perl code refs
   copyright:
     - license: Artistic-1.0-Perl OR GPL-1.0-or-later
@@ -35,11 +35,13 @@ pipeline:
 
   - name: Build and Test
     runs: |
-      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      export CFLAGS
       perl Build.PL --installdirs=vendor
 
   - runs: |
-      export CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      CFLAGS=$(perl -MConfig -E 'say $Config{ccflags}')
+      export CFLAGS
       perl Build
       perl Build test
 

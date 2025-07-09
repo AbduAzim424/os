@@ -2,8 +2,8 @@ package:
   name: datadog-agent
   # This package has two git checkouts. For each new release, the commit SHA for
   # DataDog/integrations-core must also be updated.
-  version: "7.67.0"
-  epoch: 1
+  version: "7.67.1"
+  epoch: 0
   description: "Collect events and metrics from your hosts that send data to Datadog."
   copyright:
     - license: Apache-2.0
@@ -61,7 +61,7 @@ environment:
       # https://github.com/DataDog/datadog-agent/blob/95f4d66f5fb0c10940e0f9b8fc2ab33f0c6099f0/omnibus/config/software/datadog-agent-integrations-py3-dependencies.rb
       - freetds-dev
       # - gstatus # TODO: Required by gluster
-      - gcc-12
+      - gcc-14-default
       - gnutar
       - go-1.23
       - krb5-dev
@@ -99,7 +99,7 @@ pipeline:
     with:
       repository: https://github.com/DataDog/datadog-agent
       tag: ${{package.version}}
-      expected-commit: bdf863ccc935821ea925abe7dc00ee9de991b90c
+      expected-commit: 21d1070d37f648eeb95181d0a50ae1288161b87e
 
   - runs: |
       sed -i'' 's/v1\.3\.7/v1.6.1/g' go.mod
@@ -115,6 +115,13 @@ pipeline:
       deps: |-
         github.com/cloudflare/circl@v1.6.1
       modroot: internal/tools
+
+  # Fix GHSA-fv92-fjc5-jj9h: mapstructure may leak sensitive information in logs
+  - uses: go/bump
+    with:
+      deps: |-
+        github.com/go-viper/mapstructure/v2@v2.3.0
+      modroot: .
 
   # Recent commit to the init.go code changed some of the logic of Python path resolving
   # for the embedded Python, causing issues. Let's revert the commit to return to the previous
@@ -147,11 +154,11 @@ pipeline:
     name: Install clang-12
     runs: |
       mkdir -p /usr/src
-      wget -O arch.deb http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-arm64_${LINUX_KERNEL_VERSION}_arm64.deb
+      wget -O arch.deb "http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-arm64_${LINUX_KERNEL_VERSION}_arm64.deb"
       echo "a9f5b8614dc1dc123b13de540bb98283cd927a29438e0fe010c9e477b5448124 arch.deb" | sha256sum -c
 
       dpkg -x arch.deb /tmp/arch
-      ln -s /tmp/arch/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-arm64 /usr/src/linux-headers-${LINUX_HEADERS_VERSION}-arm64
+      ln -s "/tmp/arch/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-arm64" "/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-arm64"
 
       wget "https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-aarch64-linux-gnu.tar.xz" -O /tmp/clang.tar.xz  -o /dev/null
       echo "3d4ad804b7c85007686548cbc917ab067bf17eaedeab43d9eb83d3a683d8e9d4  /tmp/clang.tar.xz" | sha256sum --check
@@ -160,11 +167,11 @@ pipeline:
     name: Install clang-12
     runs: |
       mkdir -p /usr/src
-      wget -O arch.deb http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-amd64_${LINUX_KERNEL_VERSION}_amd64.deb
+      wget -O arch.deb "http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-amd64_${LINUX_KERNEL_VERSION}_amd64.deb"
       echo "6090e3d5c874ae8ac99d777bbbcb692051af93d8d8d0cbefa6b7376b9e112317 arch.deb" | sha256sum -c
 
       dpkg -x arch.deb /tmp/arch
-      ln -s /tmp/arch/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-amd64 /usr/src/linux-headers-${LINUX_HEADERS_VERSION}-amd64
+      ln -s "/tmp/arch/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-amd64" "/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-amd64"
 
       # https://github.com/DataDog/datadog-agent-buildimages/blob/main/system-probe_x64/Dockerfile#L80
       wget "https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz" -O /tmp/clang.tar.xz  -o /dev/null
@@ -178,9 +185,9 @@ pipeline:
 
   - name: Build the System Probe
     runs: |
-      wget -O common.deb http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-common_${LINUX_KERNEL_VERSION}_all.deb
+      wget -O common.deb "http://deb.debian.org/debian-security/pool/updates/main/l/linux-5.10/linux-headers-${LINUX_HEADERS_VERSION}-common_${LINUX_KERNEL_VERSION}_all.deb"
       dpkg -x common.deb /tmp/common
-      ln -s /tmp/common/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-common /usr/src/linux-headers-${LINUX_HEADERS_VERSION}-common
+      ln -s "/tmp/common/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-common" "/usr/src/linux-headers-${LINUX_HEADERS_VERSION}-common"
 
       mkdir -p /opt/clang
       tar xf /tmp/clang.tar.xz --no-same-owner -C /opt/clang --strip-components=1
@@ -258,10 +265,10 @@ pipeline:
 
       install -Dm755 bin/agent/agent ${{targets.contextdir}}${{vars.destd}}/bin/agent
       # *-agent is just a symlink to the "agent" multicall
-      ln -s ${{vars.destd}}/bin/agent/agent ${{targets.contextdir}}${{vars.destd}}/embedded/bin/process-agent
-      ln -s ${{vars.destd}}/bin/agent/agent ${{targets.contextdir}}${{vars.destd}}/embedded/bin/security-agent
-      ln -s ${{vars.destd}}/bin/agent/agent ${{targets.contextdir}}${{vars.destd}}/embedded/bin/trace-agent
-      ln -s ${{vars.destd}}/bin/agent/agent ${{targets.contextdir}}${{vars.destd}}/embedded/bin/system-probe
+      ln -s "${{vars.destd}}/bin/agent/agent" "${{targets.contextdir}}${{vars.destd}}/embedded/bin/process-agent"
+      ln -s "${{vars.destd}}/bin/agent/agent" "${{targets.contextdir}}${{vars.destd}}/embedded/bin/security-agent"
+      ln -s "${{vars.destd}}/bin/agent/agent" "${{targets.contextdir}}${{vars.destd}}/embedded/bin/trace-agent"
+      ln -s "${{vars.destd}}/bin/agent/agent" "${{targets.contextdir}}${{vars.destd}}/embedded/bin/system-probe"
 
       mkdir -p ${{targets.contextdir}}/etc/datadog-agent/
 
@@ -315,7 +322,7 @@ subpackages:
     pipeline:
       - runs: |
           mkdir -p ${{targets.contextdir}}/usr/bin/dist/jmx
-          ln -sf ${{vars.destd}}/bin/agent/dist/jmx/jmxfetch.jar ${{targets.contextdir}}/usr/bin/dist/jmx/jmxfetch.jar
+          ln -sf "${{vars.destd}}/bin/agent/dist/jmx/jmxfetch.jar" "${{targets.contextdir}}/usr/bin/dist/jmx/jmxfetch.jar"
 
   - name: datadog-agent-oci-compat
     dependencies:
@@ -463,8 +470,8 @@ subpackages:
     pipeline:
       - runs: |
           mkdir -p ${{targets.subpkgdir}}${{vars.destd}}/bin/
-          ln -s /usr/bin/datadog-cluster-agent ${{targets.subpkgdir}}${{vars.destd}}/bin/datadog-cluster-agent
-          ln -s /usr/bin/datadog-cluster-agent ${{targets.subpkgdir}}${{vars.destd}}/bin/agent
+          ln -s /usr/bin/datadog-cluster-agent "${{targets.subpkgdir}}${{vars.destd}}/bin/datadog-cluster-agent"
+          ln -s /usr/bin/datadog-cluster-agent "${{targets.subpkgdir}}${{vars.destd}}/bin/agent"
       - working-directory: Dockerfiles/cluster-agent
         runs: |
           install -Dm755 entrypoint.sh ${{targets.subpkgdir}}/entrypoint.sh
@@ -516,7 +523,7 @@ subpackages:
             ;;
           esac
 
-          wget -O s6-overlay.tgz https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-${_arch}.tar.gz
+          wget -O s6-overlay.tgz "https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY_VERSION}/s6-overlay-${_arch}.tar.gz"
 
           echo "${expected_sha256}  s6-overlay.tgz" | sha256sum -c
 
@@ -539,33 +546,33 @@ subpackages:
             posix-umask --help
             s6-basename version
             s6-basename help
-            s6-cat --version
-            s6-cat --help
-            s6-dirname version
-            s6-dirname help
-            s6-dnsip4-filter --version
-            s6-dnsip4-filter --help
-            s6-dnsip6-filter --version
-            s6-dnsip6-filter --help
-            s6-dnsname-filter --version
-            s6-dnsname-filter --help
-            s6-dnsqualify --version
-            s6-dnsqualify --help
-            s6-dumpenv version
-            s6-dumpenv help
-            s6-echo --version
-            s6-echo --help
-            s6-env --version
-            s6-env --help
-            s6-fillurandompool --version
-            s6-fillurandompool --help
-            s6-format-filter --version
-            s6-format-filter --help
-            s6-head --version
-            s6-head --help
-            s6-ls version
-            s6-ls help
-            s6-mkdir --version
+            s6-cat --version >/tmp/datadog-agent.log 2>&1
+            s6-cat --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dirname --version >/tmp/datadog-agent.log 2>&1 &
+            s6-dirname --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsip4-filter --version >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsip4-filter --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsip6-filter --version >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsip6-filter --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsname-filter --version >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsname-filter --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsqualify --version >/tmp/datadog-agent.log 2>&1 &
+            s6-dnsqualify --help >/tmp/datadog-agent.log 2>&1 &
+            s6-dumpenv version >/tmp/datadog-agent.log 2>&1 &
+            s6-dumpenv help >/tmp/datadog-agent.log 2>&1 &
+            s6-echo --version >/tmp/datadog-agent.log 2>&1 &
+            s6-echo --help >/tmp/datadog-agent.log 2>&1 &
+            s6-env --version >/tmp/datadog-agent.log 2>&1 &
+            s6-env --help >/tmp/datadog-agent.log 2>&1 &
+            s6-fillurandompool --version >/tmp/datadog-agent.log 2>&1 &
+            s6-fillurandompool --help >/tmp/datadog-agent.log 2>&1 &
+            s6-format-filter --version >/tmp/datadog-agent.log 2>&1 &
+            s6-format-filter --help >/tmp/datadog-agent.log 2>&1 &
+            s6-head --version >/tmp/datadog-agent.log 2>&1 &
+            s6-head --help >/tmp/datadog-agent.log 2>&1 &
+            s6-ls version >/tmp/datadog-agent.log 2>&1 &
+            s6-ls help >/tmp/datadog-agent.log 2>&1 &
+            s6-mkdir --version >/tmp/datadog-agent.log 2>&1 &
             s6-mkdir --help
             s6-mount --version
             s6-mount --help
@@ -577,10 +584,10 @@ subpackages:
             s6-printenv --help
             s6-ps --version
             s6-ps --help
-            s6-quote version
-            s6-quote help
-            s6-quote-filter --version
-            s6-quote-filter --help
+            s6-quote --version >/tmp/datadog-agent.log 2>&1 &
+            s6-quote --help >/tmp/datadog-agent.log 2>&1 &
+            s6-quote-filter --version >/tmp/datadog-agent.log 2>&1 &
+            s6-quote-filter --help >/tmp/datadog-agent.log 2>&1 &
             s6-rc help
             s6-rc-bundle help
             s6-rc-db help
@@ -588,32 +595,32 @@ subpackages:
             s6-rc-dryrun help
             s6-rmrf --version
             s6-rmrf --help
-            s6-sort --version
-            s6-sort --help
-            s6-sync --version
-            s6-sync --help
-            s6-tai64n --version
-            s6-tai64n --help
-            s6-tai64ndiff --version
-            s6-tai64ndiff --help
-            s6-tai64nlocal --version
-            s6-tai64nlocal --help
-            s6-tail --version
-            s6-tail --help
-            s6-test --version
-            s6-test --help
+            s6-sort --version >/tmp/datadog-agent.log 2>&1 &
+            s6-sort --help >/tmp/datadog-agent.log 2>&1 &
+            s6-sync --version >/tmp/datadog-agent.log 2>&1 &
+            s6-sync --help >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64n --version >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64n --help >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64ndiff --version >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64ndiff --help >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64nlocal --version >/tmp/datadog-agent.log 2>&1 &
+            s6-tai64nlocal --help >/tmp/datadog-agent.log 2>&1 &
+            s6-tail --version >/tmp/datadog-agent.log 2>&1 &
+            s6-tail --help >/tmp/datadog-agent.log 2>&1 &
+            s6-test --version >/tmp/datadog-agent.log 2>&1 &
+            s6-test --help >/tmp/datadog-agent.log 2>&1 &
             s6-touch --version
             s6-touch --help
             s6-true --version
             s6-true --help
             s6-uniquename version
             s6-uniquename help
-            s6-unquote-filter --version
-            s6-unquote-filter --help
-            ucspilogd --version
-            ucspilogd --help
-            withstdinas version
-            withstdinas help
+            s6-unquote-filter --version >/tmp/datadog-agent.log 2>&1 & \
+            s6-unquote-filter --help >/tmp/datadog-agent.log 2>&1 & \
+            ucspilogd --version >/tmp/datadog-agent.log 2>&1 & \
+            ucspilogd --help >/tmp/datadog-agent.log 2>&1 & \
+            withstdinas version >/tmp/datadog-agent.log 2>&1 & \
+            withstdinas help >/tmp/datadog-agent.log 2>&1 &
 
   - name: dogstatsd
     dependencies:
@@ -639,13 +646,6 @@ subpackages:
         - runs: |
             /dogstatsd start --help
 
-update:
-  enabled: true
-  github:
-    identifier: DataDog/datadog-agent
-  ignore-regex-patterns:
-    - "lambda-extension.*"
-
 test:
   environment:
     contents:
@@ -660,10 +660,12 @@ test:
   pipeline:
     - name: Ensure the agent's requirements.txt for integrations is included
       runs: |
+        : "${mypath:?ERROR: mypath environment variable not set}"
         PATH=$mypath:$PATH
         ls ${{vars.destd}}/requirements-agent-release.txt
     - name: Ensure the agent integration subcommand works
       runs: |
+        : "${mypath:?ERROR: mypath environment variable not set}"
         PATH=$mypath:$PATH
         agent integration freeze >/dev/null
     - name: Ensure checks can be loaded (base)
@@ -678,6 +680,7 @@ test:
         import: datadog_checks.downloader
     - name: Execute bins
       runs: |
+        : "${mypath:?ERROR: mypath environment variable not set}"
         PATH=$mypath:$PATH
         process-agent --version
         process-agent --help
@@ -690,6 +693,7 @@ test:
         agent --help
     - name: Ensure agent can be started
       runs: |
+        : "${mypath:?ERROR: mypath environment variable not set}"
         PATH=$mypath:$PATH
         cat > /etc/datadog-agent/datadog.yaml <<EOF
         api_key: "test"
@@ -703,9 +707,17 @@ test:
         agent check disk
     - name: Validate multicall components are correctly linked
       runs: |
+        : "${mypath:?ERROR: mypath environment variable not set}"
         PATH=$mypath:$PATH
         trace-agent version | grep trace-agent
         security-agent version | grep "Security agent"
         process-agent version | grep Agent
         system-probe version | grep "System Probe"
     - uses: test/tw/ldd-check
+
+update:
+  enabled: true
+  github:
+    identifier: DataDog/datadog-agent
+  ignore-regex-patterns:
+    - "lambda-extension.*"
